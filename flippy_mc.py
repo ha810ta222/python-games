@@ -7,8 +7,11 @@
 # Your Own Computer Games with Python", chapter 15:
 #   http://inventwithpython.com/chapter15.html
 
-import random, sys, pygame, time, copy
-from pygame.locals import *
+import random
+import sys
+import pygame
+import time
+import copy
 
 from mcje.minecraft import Minecraft
 import param_MCJE as param
@@ -30,17 +33,17 @@ block_colors = [param.RED_WOOL,
                 param.MAGENTA_WOOL]  # purple
 
 
-FPS = 30 # frames per second to update the screen
-WINDOWWIDTH = 640 # width of the program's window, in pixels
-WINDOWHEIGHT = 480 # height in pixels
-SPACESIZE = 50 # width & height of each space on the board, in pixels
-BOARDWIDTH = 8 # how many columns of spaces on the game board
-BOARDHEIGHT = 8 # how many rows of spaces on the game board
-WHITE_TILE = 'WHITE_TILE' # an arbitrary but unique value
-BLACK_TILE = 'BLACK_TILE' # an arbitrary but unique value
-EMPTY_SPACE = 'EMPTY_SPACE' # an arbitrary but unique value
-HINT_TILE = 'HINT_TILE' # an arbitrary but unique value
-ANIMATIONSPEED = 5 # integer from 1 to 100, higher is faster animation
+FPS = 30  # frames per second to update the screen
+WINDOWWIDTH = 640  # width of the program's window, in pixels
+WINDOWHEIGHT = 480  # height in pixels
+SPACESIZE = 50  # width & height of each space on the board, in pixels
+BOARDWIDTH = 8  # how many columns of spaces on the game board
+BOARDHEIGHT = 8  # how many rows of spaces on the game board
+WHITE_TILE = 'WHITE_TILE'  # an arbitrary but unique value
+BLACK_TILE = 'BLACK_TILE'  # an arbitrary but unique value
+EMPTY_SPACE = 'EMPTY_SPACE'  # an arbitrary but unique value
+HINT_TILE = 'HINT_TILE'  # an arbitrary but unique value
+ANIMATIONSPEED = 7  # integer from 1 to 100, higher is faster animation
 
 # Amount of space on the left & right side (XMARGIN) or above and below
 # (YMARGIN) the game board, in pixels.
@@ -67,7 +70,7 @@ GREEN_mc = param.GREEN_WOOL
 CURSOR_mc = param.SEA_LANTERN_BLOCK
 
 X0_mc, Y0_mc, Z0_mc = 8, 136, -80
-wait = 0.05
+wait = 0.01
 
 
 def main():
@@ -93,7 +96,7 @@ def main():
 
     # Run the main game.
     while True:
-        if runGame() == False:
+        if not runGame():
             break
 
 
@@ -127,13 +130,15 @@ def runGame():
     while True: # main game loop
         # Keep looping for player and computer's turns.
         if turn == 'player':
+            draw_cursor_mc(cursor_posx_mc, cursor_posy_mc, color=CURSOR_mc)  # カーソル表示
+
             # Player's turn:
             if getValidMoves(mainBoard, playerTile) == []:
                 # If it's the player's turn but they
                 # can't move, then end the game.
                 break
             movexy = None
-            while movexy == None:
+            while movexy is None:
                 # Keep looping until the player clicks on a valid space.
 
                 # Determine which board data structure to use for display.
@@ -144,7 +149,7 @@ def runGame():
 
                 checkForQuit()
                 for event in pygame.event.get(): # event handling loop
-                    if event.type == MOUSEBUTTONUP:
+                    if event.type == pygame.MOUSEBUTTONUP:
                         # Handle mouse click events
                         mousex, mousey = event.pos
                         if newGameRect.collidepoint( (mousex, mousey) ):
@@ -155,7 +160,7 @@ def runGame():
                             showHints = not showHints
                         # movexy is set to a two-item tuple XY coordinate, or None value
                         movexy = getSpaceClicked(mousex, mousey)
-                        if movexy != None and not isValidMove(mainBoard, playerTile, movexy[0], movexy[1]):
+                        if movexy is not None and not isValidMove(mainBoard, playerTile, movexy[0], movexy[1]):
                             movexy = None
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_LEFT:
@@ -174,6 +179,7 @@ def runGame():
                             movexy = (cursor_posx_mc, cursor_posy_mc)
                             if not isValidMove(mainBoard, playerTile, movexy[0], movexy[1]):
                                 movexy = None
+                            update_flag = True
 
                     if event.type == pygame.KEYUP:
                         if event.key in {pygame.K_LEFT, pygame.K_RIGHT}:
@@ -216,6 +222,7 @@ def runGame():
                 turn = 'computer'
 
         else:
+            draw_cursor_mc(cursor_posx_mc, cursor_posy_mc, color=BLACK_mc)  # カーソル消す
             # Computer's turn:
             if getValidMoves(mainBoard, computerTile) == []:
                 # If it was set to be the computer's turn but
@@ -280,7 +287,7 @@ def runGame():
         # Process events until the user clicks on Yes or No.
         checkForQuit()
         for event in pygame.event.get(): # event handling loop
-            if event.type == MOUSEBUTTONUP:
+            if event.type == pygame.MOUSEBUTTONUP:
                 mousex, mousey = event.pos
                 if yesRect.collidepoint( (mousex, mousey) ):
                     return True
@@ -345,6 +352,7 @@ def animateTileChange(tilesToFlip, tileColor, additionalTile):
             pygame.draw.circle(DISPLAYSURF, color, (centerx, centery), int(SPACESIZE / 2) - 4)
             if anime_index != anime_index_last:
                 put_disc_mc(x, y, color_mc, pattern_num=anime[anime_index])
+        anime_index_last = anime_index
 
         pygame.display.update()
         MAINCLOCK.tick(FPS)
@@ -473,6 +481,8 @@ def put_disc_mc(x, y, color, pattern_num=0):
         for dx in range(8):
             if DISC_PATTERN[pattern_num][dy][dx] == 1:
                 mc.setBlock(X0_mc + 9 * x + dx + 1, Y0_mc - 9 * y - dy - 1, Z0_mc, color)
+            else:
+                mc.setBlock(X0_mc + 9 * x + dx + 1, Y0_mc - 9 * y - dy - 1, Z0_mc, GREEN_mc)
 
 
 def draw_cursor_mc(x, y, color=CURSOR_mc):
@@ -599,7 +609,7 @@ def getValidMoves(board, tile):
 
     for x in range(BOARDWIDTH):
         for y in range(BOARDHEIGHT):
-            if isValidMove(board, tile, x, y) != False:
+            if isValidMove(board, tile, x, y):
                 validMoves.append((x, y))
     return validMoves
 
@@ -640,7 +650,7 @@ def enterPlayerTile():
         # Keep looping until the player has clicked on a color.
         checkForQuit()
         for event in pygame.event.get(): # event handling loop
-            if event.type == MOUSEBUTTONUP:
+            if event.type == pygame.MOUSEBUTTONUP:
                 mousex, mousey = event.pos
                 if xRect.collidepoint( (mousex, mousey) ):
                     return [WHITE_TILE, BLACK_TILE]
@@ -660,7 +670,7 @@ def makeMove(board, tile, xstart, ystart, realMove=False):
     # Returns False if this is an invalid move, True if it is valid.
     tilesToFlip = isValidMove(board, tile, xstart, ystart)
 
-    if tilesToFlip == False:
+    if not tilesToFlip:
         return False
 
     board[xstart][ystart] = tile
@@ -707,8 +717,8 @@ def getComputerMove(board, computerTile):
 
 
 def checkForQuit():
-    for event in pygame.event.get(QUIT): # event handling loop
-        if event.type == QUIT:
+    for event in pygame.event.get(pygame.QUIT): # event handling loop
+        if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
 
