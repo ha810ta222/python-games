@@ -16,7 +16,9 @@ import param_MCJE as param
 sys.setrecursionlimit(1100)
 
 mc = Minecraft.create(port=param.PORT_MC)
-MC_X0, MC_Y0, MC_Z0 = 0, 120, 20
+mc.postToChat('Ink Spill in the Minecraft')
+
+MC_X0, MC_Y0, MC_Z0 = 0, 127, 20
 
 block_colors = (param.RED_WOOL,
                 param.LIME_WOOL,  # green
@@ -100,6 +102,8 @@ def main():
     lastPaletteClicked = None
 
     clear_board_mc()  # clear the board on Minecraft
+    drawBoard_mc(mainBoard)
+    drawAchievement(0)
 
     while True:  # main game loop
         paletteClicked = None
@@ -146,6 +150,7 @@ def main():
             lastPaletteClicked = paletteClicked
             floodAnimation(mainBoard, paletteClicked)
             life -= 1
+            drawLifeMeter_mc(life)
 
             resetGame = False
             if hasWon(mainBoard):
@@ -156,6 +161,7 @@ def main():
             elif life == 0:
                 # life is zero, so player has lost
                 drawLifeMeter(0)
+                drawLifeMeter_mc(0)
                 pygame.display.update()
                 pygame.time.wait(400)
                 for i in range(4):
@@ -166,7 +172,10 @@ def main():
         if resetGame:
             # start a new game
             mainBoard = generateRandomBoard(boardWidth, boardHeight, difficulty)
+            drawBoard_mc(mainBoard)
+            drawAchievement(0)
             life = maxLife
+            drawLifeMeter_mc(life)
             lastPaletteClicked = None
 
             # clear_board_mc()  # clear the board on Minecraft
@@ -324,6 +333,7 @@ def floodAnimation(board, paletteClicked, animationSpeed=50):  # 25
     board_for_count = copy.deepcopy(board)
     achievement = floodFill(board_for_count, paletteClicked, -1, 0, 0)
     print(achievement, achievement / (boardWidth * boardHeight) * 100, '%')
+    drawAchievement(achievement / (boardWidth * boardHeight) * 100)
 
     for transparency in range(0, 255, animationSpeed):
         # The "new" board slowly become opaque over the original board.
@@ -402,14 +412,22 @@ def drawBoard(board, transparency=255):
 
     for x in range(boardWidth):
         for y in range(boardHeight):
+            # print(boardWidth, boardHeight, x, y)
+            # print(board[x][y])
             left, top = leftTopPixelCoordOfBox(x, y)
             r, g, b = paletteColors[board[x][y]]
             pygame.draw.rect(tempSurf, (r, g, b, transparency), (left, top, boxSize, boxSize))
-            if transparency == 255:
-                draw_block_mc(x, y, boxSize, board)  # draw the block on Minecraft
     left, top = leftTopPixelCoordOfBox(0, 0)
     pygame.draw.rect(tempSurf, BLACK, (left - 1, top - 1, boxSize * boardWidth + 1, boxSize * boardHeight + 1), 1)
     DISPLAYSURF.blit(tempSurf, (0, 0))
+
+
+def drawBoard_mc(board):
+    for x in range(boardWidth):
+        for y in range(boardHeight):
+            # print(boardWidth, boardHeight, x, y)
+            # print(board[x][y])
+            draw_block_mc(x, y, board)  # draw the block on Minecraft
 
 
 def clear_board_mc():
@@ -417,11 +435,13 @@ def clear_board_mc():
     mc.setBlocks(MC_X0, MC_Y0, MC_Z0, MC_X0 + boardSize, MC_Y0 - boardSize, MC_Z0, param.AIR)
 
 
-def draw_block_mc(x, y, boxSize, board):
-    boxSize = int(boxSize / 10)
-    for i in range(boxSize):
-        for j in range(boxSize):
-            mc.setBlock(MC_X0 + x * boxSize + i, MC_Y0 - y * boxSize - j, MC_Z0, block_colors[board[x][y]])
+def draw_block_mc(x, y, board):
+    # pass
+    global boxSize
+    boxS = int(boxSize / 5)
+    for i in range(boxS):
+        for j in range(boxS):
+            mc.setBlock(MC_X0 + x * boxS + i, MC_Y0 - y * boxS - j, MC_Z0, block_colors[board[x][y]])
 
 
 def drawPalettes():
@@ -447,6 +467,37 @@ def drawLifeMeter(currentLife):
         pygame.draw.rect(DISPLAYSURF, WHITE, (20, 20 + (i * lifeBoxSize), 20, lifeBoxSize), 1)  # draw white outline
 
 
+def drawLifeMeter_mc(currentLife):
+    lifeBoxSize_mc = int(64 / maxLife)
+
+    for i in range(maxLife):
+        x1 = MC_X0 - 4
+        x2 = x1 + 2
+        y1 = MC_Y0 - i * lifeBoxSize_mc
+        y2 = y1 - lifeBoxSize_mc + 1
+        z1 = MC_Z0
+        if currentLife >= (maxLife - i):  # draw a solid red box
+            mc.setBlocks(x1, y1, z1, x2, y2, z1, param.RED_WOOL)
+        else: # draw an outlined white box
+            mc.setBlocks(x1, y1, z1, x2, y2, z1, param.GLASS)
+
+def drawAchievement(achievement):
+    max = 64
+    achieve = int(max * achievement / 100)
+    print(achieve, achievement)
+
+    for i in range(max):
+        x1 = MC_X0 - 8
+        x2 = x1 + 2
+        y1 = MC_Y0 - i
+        z1 = MC_Z0
+        if achieve > i:
+            mc.setBlocks(x1, y1, z1, x2, y1, z1, param.SEA_LANTERN_BLOCK)
+        else:
+            mc.setBlocks(x1, y1, z1, x2, y1, z1, param.GLASS)
+
+
+
 def getColorOfPaletteAt(x, y):
     # Returns the index of the color in paletteColors that the x and y parameters
     # are over. Returns None if x and y are not over any palette.
@@ -468,8 +519,11 @@ def floodFill(board, oldColor, newColor, x, y):
 
     if oldColor == newColor or board[x][y] != oldColor:
         return 0
+
     board[x][y] = newColor  # change the color of the current box
     count = 1
+    if newColor != -1:
+        draw_block_mc(x, y, board)
 
     # Make the recursive call for any neighboring boxes:
     count += floodFill(board, oldColor, newColor, x - 1, y)  # on box to the left
