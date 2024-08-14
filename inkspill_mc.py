@@ -37,9 +37,9 @@ SMALLBOARDSIZE = 8  # size is in boxes
 MEDIUMBOARDSIZE = 16
 LARGEBOARDSIZE = 32
 
-SMALLMAXLIFE = 16  # number of turns
-MEDIUMMAXLIFE = 32
-LARGEMAXLIFE = 64
+SMALLMAXLIFE = 8  # number of turns
+MEDIUMMAXLIFE = 20
+LARGEMAXLIFE = 40
 
 FPS = 30
 WINDOWWIDTH = 640
@@ -50,6 +50,10 @@ PALETTESIZE = 45
 EASY = 0    # arbitrary but unique value
 MEDIUM = 1  # arbitrary but unique value
 HARD = 2    # arbitrary but unique value
+
+# Minecraft
+PALETTEGAPSIZE_MC = 2
+PALETTESIZE_MC = 9
 
 difficulty = MEDIUM  # game starts in "medium" mode
 maxLife = MEDIUMMAXLIFE
@@ -103,7 +107,12 @@ def main():
 
     clear_board_mc()  # clear the board on Minecraft
     drawBoard_mc(mainBoard)
+    clearLifeMeter_mc()
+    drawLifeMeter_mc(life)
     drawAchievement(0)
+    drawPalettes_mc()
+    selected = 0
+    draw_cursor_mc(selected)
 
     while True:  # main game loop
         paletteClicked = None
@@ -143,23 +152,40 @@ def main():
                 if key is not None and key > 0 and key <= len(paletteColors):
                     paletteClicked = key - 1
 
+                if event.key == pygame.K_UP:
+                    draw_cursor_mc(selected, clear=True)
+                    selected = (selected - 1) % len(paletteColors)
+                    draw_cursor_mc(selected)
+                if event.key == pygame.K_DOWN:
+                    draw_cursor_mc(selected, clear=True)
+                    selected = (selected + 1) % len(paletteColors)
+                    draw_cursor_mc(selected)
+                if event.key == pygame.K_RETURN:
+                    paletteClicked = selected
+
         if paletteClicked is not None and paletteClicked != lastPaletteClicked:
             # a palette button was clicked that is different from the
             # last palette button clicked (this check prevents the player
             # from accidentally clicking the same palette twice)
             lastPaletteClicked = paletteClicked
-            floodAnimation(mainBoard, paletteClicked)
+            achieve = floodAnimation(mainBoard, paletteClicked)
             life -= 1
             drawLifeMeter_mc(life)
 
             resetGame = False
             if hasWon(mainBoard):
+                msg = 'You win!'
+                mc.postToChat(msg)
+                print(msg)
                 for i in range(4):  # flash border 4 times
                     flashBorderAnimation(WHITE, mainBoard)
                 resetGame = True
                 pygame.time.wait(2000)  # pause so the player can bask in victory
             elif life == 0:
                 # life is zero, so player has lost
+                msg = 'You lose at ' + str(int(achieve + 0.5)) + '%'
+                mc.postToChat(msg)
+                print(msg)
                 drawLifeMeter(0)
                 drawLifeMeter_mc(0)
                 pygame.display.update()
@@ -174,10 +200,14 @@ def main():
             mainBoard = generateRandomBoard(boardWidth, boardHeight, difficulty)
             drawBoard_mc(mainBoard)
             drawAchievement(0)
+            clearLifeMeter_mc()
             life = maxLife
             drawLifeMeter_mc(life)
             lastPaletteClicked = None
-
+            drawPalettes_mc()
+            draw_cursor_mc(selected, clear=True)
+            selected = 0
+            draw_cursor_mc(selected)
             # clear_board_mc()  # clear the board on Minecraft
 
         pygame.display.update()
@@ -332,8 +362,9 @@ def floodAnimation(board, paletteClicked, animationSpeed=50):  # 25
 
     board_for_count = copy.deepcopy(board)
     achievement = floodFill(board_for_count, paletteClicked, -1, 0, 0)
-    print(achievement, achievement / (boardWidth * boardHeight) * 100, '%')
-    drawAchievement(achievement / (boardWidth * boardHeight) * 100)
+    achieve = achievement / (boardWidth * boardHeight) * 100
+    print(achievement, achieve, int(achieve + 0.5),  '%')
+    drawAchievement(achieve)
 
     for transparency in range(0, 255, animationSpeed):
         # The "new" board slowly become opaque over the original board.
@@ -341,6 +372,8 @@ def floodAnimation(board, paletteClicked, animationSpeed=50):  # 25
         drawBoard(board, transparency)
         pygame.display.update()
         FPSCLOCK.tick(FPS)
+
+    return achieve
 
 
 def generateRandomBoard(width, height, difficulty=MEDIUM):
@@ -412,8 +445,6 @@ def drawBoard(board, transparency=255):
 
     for x in range(boardWidth):
         for y in range(boardHeight):
-            # print(boardWidth, boardHeight, x, y)
-            # print(board[x][y])
             left, top = leftTopPixelCoordOfBox(x, y)
             r, g, b = paletteColors[board[x][y]]
             pygame.draw.rect(tempSurf, (r, g, b, transparency), (left, top, boxSize, boxSize))
@@ -425,14 +456,12 @@ def drawBoard(board, transparency=255):
 def drawBoard_mc(board):
     for x in range(boardWidth):
         for y in range(boardHeight):
-            # print(boardWidth, boardHeight, x, y)
-            # print(board[x][y])
             draw_block_mc(x, y, board)  # draw the block on Minecraft
 
 
 def clear_board_mc():
     boardSize = LARGEBOARDSIZE - 1
-    mc.setBlocks(MC_X0, MC_Y0, MC_Z0, MC_X0 + boardSize, MC_Y0 - boardSize, MC_Z0, param.AIR)
+    mc.setBlocks(MC_X0 - 20, MC_Y0, MC_Z0, MC_X0 + boardSize + 20, MC_Y0 - boardSize, MC_Z0, param.AIR)
 
 
 def draw_block_mc(x, y, board):
@@ -455,6 +484,37 @@ def drawPalettes():
         pygame.draw.rect(DISPLAYSURF, bgColor,   (left + 2, top + 2, PALETTESIZE - 4, PALETTESIZE - 4), 2)
 
 
+def drawPalettes_mc():
+    # Draws the six color palettes at the right of the Minecraft game board.
+    numColors = len(paletteColors)
+    for i in range(numColors):
+        x1 = MC_X0 + 64 + 4
+        x2 = x1 + PALETTESIZE_MC - 1
+        y1 = MC_Y0 - i * (PALETTESIZE_MC + PALETTEGAPSIZE_MC)
+        y2 = y1 - PALETTESIZE_MC + 1
+        mc.setBlocks(x1, y1, MC_Z0,
+                     x2, y2, MC_Z0, block_colors[i])
+        draw_cursor_mc(i, clear=True)
+
+
+def draw_cursor_mc(selected, clear=False):
+        i = selected
+        x1 = MC_X0 + 64 + 4 - 2
+        x2 = x1 + PALETTESIZE_MC + 2
+        y1 = MC_Y0 - i * (PALETTESIZE_MC + PALETTEGAPSIZE_MC) + 1
+        y2 = y1 - PALETTESIZE_MC - 1
+        if clear:
+            color = param.GLASS
+        else:
+            color = param.SEA_LANTERN_BLOCK
+        mc.setBlocks(x1, y1, MC_Z0, x1 + 1, y2, MC_Z0, color)
+        mc.setBlocks(x1, y1, MC_Z0, x2, y1, MC_Z0, color)
+        mc.setBlocks(x2, y1, MC_Z0, x2 + 1, y2, MC_Z0, color)
+        mc.setBlocks(x1, y2, MC_Z0, x2, y2, MC_Z0, color)
+
+
+
+
 def drawLifeMeter(currentLife):
     lifeBoxSize = int((WINDOWHEIGHT - 40) / maxLife)
 
@@ -468,26 +528,33 @@ def drawLifeMeter(currentLife):
 
 
 def drawLifeMeter_mc(currentLife):
-    lifeBoxSize_mc = int(64 / maxLife)
+    lifeBoxSize_mc = 64 / maxLife
 
     for i in range(maxLife):
-        x1 = MC_X0 - 4
+        x1 = MC_X0 - 5
         x2 = x1 + 2
-        y1 = MC_Y0 - i * lifeBoxSize_mc
-        y2 = y1 - lifeBoxSize_mc + 1
+        y1 = int(MC_Y0 - i * lifeBoxSize_mc)
+        y2 = int(y1 - lifeBoxSize_mc + 1)
         z1 = MC_Z0
         if currentLife >= (maxLife - i):  # draw a solid red box
             mc.setBlocks(x1, y1, z1, x2, y2, z1, param.RED_WOOL)
         else: # draw an outlined white box
             mc.setBlocks(x1, y1, z1, x2, y2, z1, param.GLASS)
 
+def clearLifeMeter_mc():
+        x1 = MC_X0 - 5
+        x2 = x1 + 2
+        y1 = MC_Y0
+        y2 = y1 - 128 + 1
+        z1 = MC_Z0
+        mc.setBlocks(x1, y1, z1, x2, y2, z1, param.AIR)
+
 def drawAchievement(achievement):
     max = 64
     achieve = int(max * achievement / 100)
-    print(achieve, achievement)
 
     for i in range(max):
-        x1 = MC_X0 - 8
+        x1 = MC_X0 - 10
         x2 = x1 + 2
         y1 = MC_Y0 - i
         z1 = MC_Z0
