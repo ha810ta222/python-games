@@ -9,6 +9,11 @@
 
 import random, sys, pygame, time, copy
 from pygame.locals import *
+from mcje.minecraft import Minecraft
+import param_MCJE as param
+mc = Minecraft.create(port=param.PORT_MC)
+
+KOMA = 4
 
 FPS = 10 # frames per second to update the screen
 WINDOWWIDTH = 640 # width of the program's window, in pixels
@@ -21,6 +26,14 @@ BLACK_TILE = 'BLACK_TILE' # an arbitrary but unique value
 EMPTY_SPACE = 'EMPTY_SPACE' # an arbitrary but unique value
 HINT_TILE = 'HINT_TILE' # an arbitrary but unique value
 ANIMATIONSPEED = 25 # integer from 1 to 100, higher is faster animation
+
+WHITE_mc = param.WHITE_WOOL
+BLACK_mc = param.BLACK_WOOL
+HINTCOLOR_mc = param.BROWN_WOOL
+GREEN_mc = param.GREEN_WOOL
+CURSOR_mc = param.SEA_LANTERN_BLOCK
+
+X0_mc, Y0_mc, Z0_mc = 8, 156, -80
 
 # Amount of space on the left & right side (XMARGIN) or above and below
 # (YMARGIN) the game board, in pixels.
@@ -61,12 +74,18 @@ def main():
     # Use smoothscale() to stretch the background image to fit the entire window:
     BGIMAGE = pygame.transform.smoothscale(BGIMAGE, (WINDOWWIDTH, WINDOWHEIGHT))
     BGIMAGE.blit(boardImage, boardImageRect)
+    drawBoardmc()
 
     # Run the main game.
     while True:
         if runGame() == False:
             break
 
+def drawBoardmc():
+    mc.setBlocks(X0_mc+1,Y0_mc+-1,Z0_mc,X0_mc+(KOMA+3)*8-1,Y0_mc-(KOMA+3)*8+1,Z0_mc,GREEN_mc)
+    for i in range(0,9):
+        mc.setBlocks(X0_mc+(KOMA+3)*i,Y0_mc,Z0_mc,X0_mc+(KOMA+3)*i,Y0_mc-(KOMA+3)*8,Z0_mc,BLACK_mc)
+        mc.setBlocks(X0_mc,Y0_mc-(KOMA+3)*i,Z0_mc,X0_mc+(KOMA+3)*8,Y0_mc-(KOMA+3)*i,Z0_mc,BLACK_mc)
 
 def runGame():
     # Plays a single game of reversi each time this function is called.
@@ -252,11 +271,16 @@ def animateTileChange(tilesToFlip, tileColor, additionalTile):
         MAINCLOCK.tick(FPS)
         checkForQuit()
 
-
+def drawfilp(sx,sy,z,color):
+    for i in range(0,KOMA):
+        for j in range(0,KOMA):
+            if not ((i==0 or i==KOMA-1) and (j==0 or j==KOMA-1)):
+                mc.setBlock(sx+i,sy-j,z,color)
+    
 def drawBoard(board):
     # Draw background of board.
     DISPLAYSURF.blit(BGIMAGE, BGIMAGE.get_rect())
-
+    
     # Draw grid lines of the board.
     for x in range(BOARDWIDTH + 1):
         # Draw the horizontal lines.
@@ -280,12 +304,19 @@ def drawBoard(board):
             if board[x][y] == WHITE_TILE or board[x][y] == BLACK_TILE:
                 if board[x][y] == WHITE_TILE:
                     tileColor = WHITE
+                    
+                    drawfilp(X0_mc+(KOMA+3)*x+2,Y0_mc-(KOMA+3)*y-2,Z0_mc,WHITE_mc)
+
                 else:
                     tileColor = BLACK
+                    
+                    drawfilp(X0_mc+(KOMA+3)*x+2,Y0_mc-(KOMA+3)*y-2,Z0_mc,BLACK_mc)
+
                 pygame.draw.circle(DISPLAYSURF, tileColor, (centerx, centery), int(SPACESIZE / 2) - 4)
             if board[x][y] == HINT_TILE:
                 pygame.draw.rect(DISPLAYSURF, HINTCOLOR, (centerx - 4, centery - 4, 8, 8))
-
+                #mc.setBlocks(X0_mc+(KOMA+3)*x+3,Y0_mc-(KOMA+3)*y-3,Z0_mc,X0_mc(KOMA+3)*x+4,Y0_mc-(KOMA+3)*y-1,Z0_mc,HINTCOLOR_mc)
+                mc.setBlocks(X0_mc+(KOMA+3)*x+3,Y0_mc,Z0_mc,X0_mc+(KOMA+3)*x+4,Y0_mc,Z0_mc,HINTCOLOR_mc)
 
 def getSpaceClicked(mousex, mousey):
     # Return a tuple of two integers of the board space coordinates where
